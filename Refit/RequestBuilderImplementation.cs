@@ -21,7 +21,7 @@ namespace Refit
         {
         }
     }
-
+    [Obfuscation(Exclude = true)]
     partial class RequestBuilderImplementation : IRequestBuilder
     {
         static readonly ISet<HttpMethod> BodylessMethods = new HashSet<HttpMethod>
@@ -74,13 +74,14 @@ namespace Refit
                 var hasHttpMethod = attrs.OfType<HttpMethodAttribute>().Any();
                 if (hasHttpMethod)
                 {
-                    if (!methods.ContainsKey(methodInfo.Name))
+                    var methodNameAttr = attrs.OfType<MethodNameAttribute>().FirstOrDefault();
+                    var methodName = methodNameAttr?.Name ?? methodInfo.Name;
+                    if (!methods.ContainsKey(methodName))
                     {
-                        methods.Add(methodInfo.Name, new List<RestMethodInfo>());
+                        methods.Add(methodName, new List<RestMethodInfo>());
                     }
-
                     var restinfo = new RestMethodInfo(interfaceType, methodInfo, settings);
-                    methods[methodInfo.Name].Add(restinfo);
+                    methods[methodName].Add(restinfo);
                 }
             }
         }
@@ -129,7 +130,7 @@ namespace Refit
             }
             else
             {
-                throw new ArgumentException("Method must be defined and have an HTTP Method attribute");
+                throw new ArgumentException($"Method '{key}' must be defined and have an HTTP Method attribute");
             }
 
         }
@@ -148,7 +149,7 @@ namespace Refit
         {
             if (!interfaceHttpMethods.ContainsKey(methodName))
             {
-                throw new ArgumentException("Method must be defined and have an HTTP Method attribute");
+                throw new ArgumentException($"Method '{methodName}' must be defined and have an HTTP Method attribute");
             }
 
             var restMethod = FindMatchingRestMethodInfo(methodName, parameterTypes, genericArgumentTypes);

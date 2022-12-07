@@ -51,12 +51,34 @@ namespace Refit
                 .ConfigureHttpMessageHandlerBuilder(builder =>
                 {
                     // check to see if user provided custom auth token
-                    if (CreateInnerHandlerIfProvided(builder.Services.GetRequiredService<SettingsFor<T>>().Settings) is {} innerHandler)
+                    if (CreateInnerHandlerIfProvided(builder.Services.GetRequiredService<SettingsFor<T>>().Settings) is { } innerHandler)
                     {
                         builder.PrimaryHandler = innerHandler;
                     }
                 })
                 .AddTypedClient((client, serviceProvider) => RestService.For<T>(client, serviceProvider.GetService<IRequestBuilder<T>>()!));
+        }
+
+        public static IHttpClientBuilder AddRefitClient<TInterface,TImpl>(this IServiceCollection services, RefitSettings? settings) where TInterface : class
+        {
+            services.AddSingleton(provider => new SettingsFor<TInterface>(settings));
+            services.AddSingleton(provider => RequestBuilder.ForType<TInterface>(provider.GetRequiredService<SettingsFor<TInterface>>().Settings));
+
+            static TInterface For(HttpClient client, IRequestBuilder builder)
+            {
+                return (TInterface)Activator.CreateInstance(typeof(TImpl), client, builder)!;
+            }
+            return services
+                .AddHttpClient(UniqueName.ForType<TInterface>())
+                .ConfigureHttpMessageHandlerBuilder(builder =>
+                {
+                    // check to see if user provided custom auth token
+                    if (CreateInnerHandlerIfProvided(builder.Services.GetRequiredService<SettingsFor<TInterface>>().Settings) is { } innerHandler)
+                    {
+                        builder.PrimaryHandler = innerHandler;
+                    }
+                })
+                .AddTypedClient<TInterface>((client, serviceProvider) => For(client, serviceProvider.GetService<IRequestBuilder<TInterface>>()!));
         }
 
         /// <summary>
@@ -71,7 +93,8 @@ namespace Refit
             var settingsType = typeof(SettingsFor<>).MakeGenericType(refitInterfaceType);
             var requestBuilderType = typeof(IRequestBuilder<>).MakeGenericType(refitInterfaceType);
             services.AddSingleton(settingsType, provider => Activator.CreateInstance(typeof(SettingsFor<>).MakeGenericType(refitInterfaceType)!, settingsAction?.Invoke(provider))!);
-            services.AddSingleton(requestBuilderType, provider => RequestBuilderGenericForTypeMethod.MakeGenericMethod(refitInterfaceType).Invoke(null, new object?[] { ((ISettingsFor)provider.GetRequiredService(settingsType)).Settings })!);
+            services.AddSingleton(requestBuilderType,
+                provider => RequestBuilderGenericForTypeMethod.MakeGenericMethod(refitInterfaceType).Invoke(null, new object?[] {((ISettingsFor)provider.GetRequiredService(settingsType)).Settings})!);
 
             return services
                 .AddHttpClient(UniqueName.ForType(refitInterfaceType))
